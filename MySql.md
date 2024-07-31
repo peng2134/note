@@ -254,10 +254,10 @@ flask db upgrade
 from flask import Blueprint, render_template
 
 from exts import db
-from model import adminModel
+from model import xxModel
 
 
-bp = Blueprint('admin', __name__, url_prefix='/admin')
+bp = Blueprint('xx', __name__, url_prefix='/xx')
 
 
 @bp.route('/add')
@@ -265,14 +265,14 @@ def add():
     username = "张三"
     password = "11111"
     mobile   = "12321312312"
-    admin = adminModel(username = username, password = password,mobile= mobile)
+    admin = xxModel(username = username, password = password,mobile= mobile)
     db.session.add(admin)
     db.session.commit()
     return  "添加成功"
 @bp.route('/delete')
 def delete():
     username = "张三"
-    user = adminModel.query.filter_by(username= username).first()
+    user = xxModel.query.filter_by(username= username).first()
     db.session.delete(user)
     db.session.commit()
     return "删除成功"
@@ -281,7 +281,7 @@ def delete():
 @bp.route('/update')
 def update():
     username = "张三"
-    user = adminModel.query.filter_by(username= username).first()
+    user = xxModel.query.filter_by(username= username).first()
     user.password = "233333"
     db.session.commit()
     return "更新成功"
@@ -289,14 +289,12 @@ def update():
 @bp.route('/get')
 def get():
     username = "张三"
-    user = adminModel.query.filter_by(username=username).first()
+    user = xxModel.query.filter_by(username=username).first()
     return render_template('getadmin.html', admin=user)
 
 6. 在app中注册蓝图
 from blueprint.admin import bp
 app.register_blueprint(bp)
-
-
 ```
 
 
