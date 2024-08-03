@@ -42,7 +42,7 @@ settings.py：项目配置文件 数据库连接，注册app....
 
 ![image-20240731104230474](.\笔记图片\image-20240731104230474.png)
 
-### 主页创建
+### 页面创建
 
 ![img](E:\Code\笔记\笔记图片\5ed2388e6a7dc0d75d3de79f3ea28a4a.png)
 
@@ -66,6 +66,17 @@ path() 中的路由是一个字符串，用于定义要匹配的 URL 模式。�
 
 ![image-20240731110354615](.\笔记图片\image-20240731110354615.png)
 
+路由模块化
+
+通过在项目根目录下的urls.py添加本模块的路径
+
+```python
+urlpatterns +=[
+    path('catalog/',include('catalog.urls')),
+    #使用catalog.urls.py中的所有路由载入根目录下的urls.py中
+]
+```
+
 ### 启动django 项目
 
 ```
@@ -86,8 +97,6 @@ def user_list(request):
     #2. 默认去当前目录下寻找templates目录 (根据app的注册顺序，逐一去他们的templates目录下寻找)
     return  render(request,"user_list.html")
 ```
-
-
 
 ```html
 {% extends "base_generic.html" %}
@@ -111,6 +120,12 @@ def user_list(request):
     <li><strong>Languages:</strong> {{ num_languages }}</li>
   </ul>
 {% endblock %}
+```
+
+路由的获取
+
+```html
+<a href="{% url 'appname:路由名' %}">Home</a>
 ```
 
 
@@ -212,13 +227,14 @@ class MyModelName(models.Model):
 
 通过宣告 class Meta 来宣告模型级别的元数据,排序将依赖字段的类型（字符串字段按字母顺序排序，而日期字段按时间顺序排序）。你可以使用减号（-）对字段名称进行前缀，以反转排序顺序。
 
-翻译：理解为数据库中的order by
+翻译：理解为数据库中的order by 
 
 假设，我们按照以下的顺序来排列书单
 
 ```python
 class Meta:
     ordering = ['title', '-pubdate']
+    db_table = 'table_name' #对应数据库中的表，如果不添加的话会默认模型民来作为默认的表名
 ```
 
 书单通过标题依据--字母排序--排列，从 A 到 Z，然后再依每个标题的出版日期，从最新到最旧排列。
@@ -305,17 +321,149 @@ class BookInstanceAdmin(admin.ModelAdmin):
     pass
 ```
 
+添加超级用户
 
-
-
-
-
+python manage.py createsuperuser
 
 RE(正则表达式)
 
+### 视图创建
+
+#### 视图函数
+
+1. 我们可以通过将views中的函数和urls进行连接，从而完成模板和视图以及路由的绑定，如下图的index()
+
+```python
+urlpatterns = [
+    path('',views.index,name='index'),
+]
+def index(request):
+    num_books = Book.objects.all().count()
+    num_instances = Book.objects.all().count()
+    num_genres = Genre.objects.all().count()
+    num_languages = Language.objects.all().count()
+    num_instances_available = BookInstance.objects.filter(status__exact='a').count()
+    # 可以借书的个数
+    num_authors = Author.objects.count()
+    # 返回所有作者的数量
+    return render(request,'index.html',
+        context={'num_books': num_books, 'num_instances': num_instances,
+                 'num_instances_available': num_instances_available, 'num_authors': num_authors,'num_genres': num_genres,'num_languages': num_languages},
+    )
+```
+
+2. 通过类的列表视图（list）和详细信息视图(detail)方法	
+
+首先同样的，我们仍然需要在urls.py中完成路由的绑定
+
+```python
+urlpatterns = [
+    path('', views.index, name='index'),
+  
+    path('books/', views.BookListView.as_view(), name='books'),
+     # as_view():首先这是一个classmethod，其次它能够完成创建一个实例的所有工作，并且确保为传入的 HTTP 请求调用正确的处理程序方法。
+]
+```
+
+接下来就是编写我们的类,首先我们完成列表视图的编写
+
+```python
+from django.views import generic
+from .models import Book
+class BookListView(generic.ListView):
+    model = Book
+    context_object_name = 'book_list'
+#作为一个输入模板变量名 就是 return render(reuqest,xx.html,context={})中context的名字
+    template_name = 'my_arbitrary_template_name_list.html'
+    # 继承的generic.ListView已经实现了大部分我们需要使用大部分视图功能，使得代码量减少，更快的完成工作
+# model将获得数据库中Book表所有的数据，然后将会渲染一个名为“book_list.html”的模板 注：这里教程说会连接到/application_name/templates//application_name/the_model_name_list.html 但是我发现 只要修改template_name就可以了
+	
+    paginate_by = 10
+    
+   # 通过此添加，只要有 10 条以上的记录，视图就会开始对发送到模板的数据进行分页。使用 GET 参数访问不同的页面 — 要访问第 2 页，您将使用 URL /catalog/books/？page=2。
+    
+    
+    #queryset = Book.objects.filter(title__icontains='war')[:5]
+    #对数据进行筛选，也可以直接重写这个方法
+    def get_queryset(self):
+        return Book.objects.filter(title__icontains='war')[:5]
+    
+    def get_context_data(self, **kwargs):
+        # Call the base implementation first to get the context
+        context = super(BookListView, self).get_context_data(**kwargs)
+        # Create any data and add it to the context
+        context['some_data'] = 'This is just some data'
+        return context
+```
+
+然后我们来完成详细视图，
+
+```python
+urlpatterns = [
+    path('', views.index, name='index'),
+    path('books/', views.BookListView.as_view(), name='books'),
+    path('book/<int:pk>', views.BookDetailView.as_view(), name='book-detail'),
+]
+```
 
 
-#### 示例流程
+
+`	path()`提供的模式匹配非常简单，对于你只想捕获任何字符串或整数的（非常常见的）情况非常有用。如果需要更精细的过滤（例如，仅过滤具有一定数量字符的字符串），则可以使用 [re_path()](https://docs.djangoproject.com/en/2.0/ref/urls/#django.urls.re_path) 方法。
+
+​	此方法与`path()`的使用一样，除了它允许你使用[正则表达式](https://docs.python.org/3/library/re.html)，以指定模式。例如，上面的路径可以编写为如下所示：这个有点复杂😵
+
+```python
+re_path(r'^book/(?P<pk>\d+)$', views.BookDetailView.as_view(), name='book-detail'),
+```
+
+View(class-based)
+
+```python
+class BookDetailView(generic.DetailView):
+    model = Book
+    template_name = 'books/book_detail.html'
+ # 这就是类视图需要做的
+ # 而如果我们需要使用函数则需要如下所示
+def book_detail_view(request, primary_key):
+    try:
+        book = Book.objects.get(pk=primary_key)
+    except Book.DoesNotExist:
+        raise Http404('Book does not exist')
+
+    return render(request, 'catalog/book_detail.html', context={'book': book})
+```
+
+#### 分页
+
+前面我们设置了一页最多显示数量，现在我们来设置分页需求
+
+这一般在模板中完成
+
+```django
+ {% block pagination %}
+                {% if is_paginated %}
+                    <div class="pagination">
+            <span class="page-links">
+                {% if page_obj.has_previous %}
+                    <a href="{{ request.path }}?page={{ page_obj.previous_page_number }}">previous</a>
+                {% endif %}
+                <span class="page-current">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+                </span>
+                {% if page_obj.has_next %}
+                    <a href="{{ request.path }}?page={{ page_obj.next_page_number }}">next</a>
+                {% endif %}
+            </span>
+                    </div>
+                {% endif %}
+            {% endblock %}
+```
+
+上面的代码首先会确认是否开启了分页，如果确认开启，它会根据需要添加下一个和上一个链接（以及当前页码）。
+
+​	page_obj是一个 Paginator 对象，如果在当前页面上使用分页，该对象将存在。它使您可以获取有关当前页面，先前页面，有多少页面等... 所有信息。为了创建分页连接，使用{{request.path}}去得到当前页面URL
+
+### 示例流程
 
 在settings.py中修改
 
